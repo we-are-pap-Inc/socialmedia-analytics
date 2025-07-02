@@ -6,6 +6,7 @@ with cached data and manual refresh capabilities.
 """
 
 import json
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 from src.analytics.instagram import InstagramAnalytics
 from src.analytics.tiktok import TikTokAnalytics
@@ -47,9 +50,26 @@ def load_accounts_config() -> Dict[str, Any]:
     # First, try to load from Streamlit secrets (for cloud deployment)
     try:
         if hasattr(st, 'secrets') and 'accounts' in st.secrets:
-            return st.secrets['accounts'].to_dict()
-    except:
-        pass
+            # Convert streamlit secrets to proper dict format
+            config = {}
+            if 'instagram' in st.secrets.accounts:
+                config['instagram'] = list(st.secrets.accounts.instagram)
+            else:
+                config['instagram'] = []
+            
+            if 'tiktok' in st.secrets.accounts:
+                config['tiktok'] = list(st.secrets.accounts.tiktok)
+            else:
+                config['tiktok'] = []
+            
+            if 'settings' in st.secrets.accounts:
+                config['settings'] = dict(st.secrets.accounts.settings)
+            else:
+                config['settings'] = {}
+            
+            return config
+    except Exception as e:
+        logger.warning(f"Error loading from secrets: {e}")
     
     # Fall back to accounts.json file
     accounts_path = Path("accounts.json")
@@ -103,7 +123,9 @@ def load_account_data(
         if not raw_data or (len(raw_data) == 1 and 'error' in raw_data[0]):
             return {
                 'error': True,
-                'message': f"No data found for {platform} @{username}. Account may be private or doesn't exist."
+                'message': f"No data found for {platform} @{username}. Account may be private or doesn't exist.",
+                'platform': platform,
+                'username': username
             }
         
         # Transform data
@@ -143,7 +165,9 @@ def load_account_data(
     except Exception as e:
         return {
             'error': True,
-            'message': f"Error analyzing {platform} @{username}: {str(e)}"
+            'message': f"Error analyzing {platform} @{username}: {str(e)}",
+            'platform': platform,
+            'username': username
         }
 
 
@@ -943,12 +967,22 @@ def main():
     st.header("Account Analysis")
     
     # Create tabs for each account
-    tab_names = [f"{r['platform'].title()} @{r['username']}" for r in all_results]
-    tabs = st.tabs(tab_names)
+    tab_names = []
+    for r in all_results:
+        if 'platform' in r and 'username' in r:
+            tab_names.append(f"{r['platform'].title()} @{r['username']}")
+        else:
+            # Fallback for malformed results
+            tab_names.append("Unknown Account")
     
-    for tab, result in zip(tabs, all_results):
-        with tab:
-            display_account_analysis(result)
+    if tab_names:
+        tabs = st.tabs(tab_names)
+        
+        for tab, result in zip(tabs, all_results):
+            with tab:
+                display_account_analysis(result)
+    else:
+        st.warning("No accounts to display")
     
     # Download section
     st.header("Export Data")

@@ -1,346 +1,241 @@
 """
-Data validation utilities for social media analytics.
+Input validation utilities for security and data integrity.
 
-This module provides validation functions for ensuring data quality
-and consistency across platforms.
+This module provides validators for user inputs to prevent injection attacks
+and ensure data quality.
 """
 
 import re
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
-
-import pandas as pd
-from pydantic import BaseModel, ValidationError
+from typing import List, Optional
+from urllib.parse import urlparse
 
 
-def validate_url(url: str, platform: str) -> bool:
+def validate_username(username: str) -> bool:
     """
-    Validate social media URL format.
-    
-    Parameters
-    ----------
-    url : str
-        URL to validate.
-    platform : str
-        Platform name ('instagram' or 'tiktok').
-    
-    Returns
-    -------
-    bool
-        True if URL is valid for the platform.
-    """
-    platform = platform.lower()
-    
-    patterns = {
-        'instagram': r'^https?://(?:www\.)?instagram\.com/(?:p|reel)/[\w-]+/?$',
-        'tiktok': r'^https?://(?:www\.)?tiktok\.com/@[\w.]+/video/\d+/?$'
-    }
-    
-    pattern = patterns.get(platform)
-    if not pattern:
-        return False
-    
-    return bool(re.match(pattern, url))
-
-
-def validate_username(username: str, platform: str) -> bool:
-    """
-    Validate username format for platform.
+    Validate social media username.
     
     Parameters
     ----------
     username : str
         Username to validate.
-    platform : str
-        Platform name.
-    
+        
     Returns
     -------
     bool
-        True if username is valid.
+        True if valid, False otherwise.
     """
-    if not username:
-        return False
-    
-    # Remove @ if present
-    username = username.lstrip('@')
-    
-    # Platform-specific rules
-    if platform.lower() == 'instagram':
-        # Instagram: 1-30 chars, letters, numbers, periods, underscores
-        pattern = r'^[\w.]{1,30}$'
-    elif platform.lower() == 'tiktok':
-        # TikTok: 2-24 chars, letters, numbers, underscores, periods
-        pattern = r'^[\w.]{2,24}$'
-    else:
-        return False
-    
+    # Allow alphanumeric, underscore, dot, max 30 chars
+    pattern = r'^[a-zA-Z0-9_.]{1,30}$'
     return bool(re.match(pattern, username))
 
 
-def validate_hashtag(hashtag: str) -> bool:
+def validate_platform(platform: str) -> bool:
     """
-    Validate hashtag format.
+    Validate platform name.
     
     Parameters
     ----------
-    hashtag : str
-        Hashtag to validate.
-    
+    platform : str
+        Platform name to validate.
+        
     Returns
     -------
     bool
-        True if hashtag is valid.
+        True if valid, False otherwise.
     """
-    # Remove # if present
-    hashtag = hashtag.lstrip('#')
-    
-    # Must contain only letters, numbers, underscores
-    # Must not be empty
-    return bool(re.match(r'^[\w]+$', hashtag)) and len(hashtag) > 0
+    allowed_platforms = ["instagram", "tiktok"]
+    return platform.lower() in allowed_platforms
 
 
-def validate_timestamp_range(
-    start_date: str,
-    end_date: str
-) -> Tuple[bool, Optional[str]]:
+def validate_limit(limit: int, min_val: int = 1, max_val: int = 500) -> bool:
     """
-    Validate timestamp range.
+    Validate numeric limit.
     
     Parameters
     ----------
-    start_date : str
-        Start date in ISO format.
-    end_date : str
-        End date in ISO format.
-    
+    limit : int
+        Limit value to validate.
+    min_val : int
+        Minimum allowed value.
+    max_val : int
+        Maximum allowed value.
+        
     Returns
     -------
-    Tuple[bool, Optional[str]]
-        (is_valid, error_message)
+    bool
+        True if valid, False otherwise.
     """
-    try:
-        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        
-        if start > end:
-            return False, "Start date must be before end date"
-        
-        if start > datetime.now():
-            return False, "Start date cannot be in the future"
-        
-        return True, None
-        
-    except (ValueError, AttributeError) as e:
-        return False, f"Invalid date format: {str(e)}"
-
-
-def validate_dataframe_schema(
-    df: pd.DataFrame,
-    required_columns: List[str]
-) -> Tuple[bool, List[str]]:
-    """
-    Validate DataFrame has required columns.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to validate.
-    required_columns : List[str]
-        List of required column names.
-    
-    Returns
-    -------
-    Tuple[bool, List[str]]
-        (is_valid, missing_columns)
-    """
-    missing_columns = [col for col in required_columns if col not in df.columns]
-    return len(missing_columns) == 0, missing_columns
-
-
-def validate_numeric_columns(
-    df: pd.DataFrame,
-    numeric_columns: List[str]
-) -> Dict[str, Dict[str, Any]]:
-    """
-    Validate numeric columns for data quality issues.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame to validate.
-    numeric_columns : List[str]
-        List of columns that should be numeric.
-    
-    Returns
-    -------
-    Dict[str, Dict[str, Any]]
-        Validation results for each column.
-    """
-    results = {}
-    
-    for col in numeric_columns:
-        if col not in df.columns:
-            results[col] = {'exists': False}
-            continue
-        
-        column_data = df[col]
-        
-        # Try to convert to numeric
-        numeric_data = pd.to_numeric(column_data, errors='coerce')
-        
-        results[col] = {
-            'exists': True,
-            'is_numeric': column_data.dtype in ['int64', 'float64'],
-            'has_nulls': column_data.isna().any(),
-            'null_count': column_data.isna().sum(),
-            'negative_values': (numeric_data < 0).sum(),
-            'zero_values': (numeric_data == 0).sum(),
-            'conversion_errors': numeric_data.isna().sum() - column_data.isna().sum()
-        }
-    
-    return results
-
-
-def validate_engagement_data(df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Validate engagement data for anomalies.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame with engagement data.
-    
-    Returns
-    -------
-    Dict[str, Any]
-        Validation results and warnings.
-    """
-    warnings = []
-    
-    # Check if views < likes (impossible)
-    if 'views_count' in df.columns and 'likes_count' in df.columns:
-        invalid_views = df[df['views_count'] < df['likes_count']]
-        if len(invalid_views) > 0:
-            warnings.append(
-                f"{len(invalid_views)} posts have more likes than views"
-            )
-    
-    # Check for suspiciously high engagement rates
-    if 'engagement_count' in df.columns and 'views_count' in df.columns:
-        df['temp_engagement_rate'] = df['engagement_count'] / df['views_count'].clip(lower=1)
-        suspicious = df[df['temp_engagement_rate'] > 0.5]  # >50% engagement
-        if len(suspicious) > 0:
-            warnings.append(
-                f"{len(suspicious)} posts have suspiciously high engagement rates (>50%)"
-            )
-        df.drop('temp_engagement_rate', axis=1, inplace=True)
-    
-    # Check for missing timestamps
-    if 'timestamp' in df.columns:
-        missing_timestamps = df['timestamp'].isna().sum()
-        if missing_timestamps > 0:
-            warnings.append(f"{missing_timestamps} posts have missing timestamps")
-    
-    # Check for duplicate posts
-    if 'post_id' in df.columns:
-        duplicates = df['post_id'].duplicated().sum()
-        if duplicates > 0:
-            warnings.append(f"{duplicates} duplicate post IDs found")
-    
-    return {
-        'is_valid': len(warnings) == 0,
-        'warnings': warnings,
-        'total_posts': len(df),
-        'date_range': {
-            'start': df['timestamp'].min() if 'timestamp' in df.columns else None,
-            'end': df['timestamp'].max() if 'timestamp' in df.columns else None
-        }
-    }
+    return isinstance(limit, int) and min_val <= limit <= max_val
 
 
 def sanitize_filename(filename: str) -> str:
     """
-    Sanitize filename for safe file system usage.
+    Sanitize filename to prevent path traversal.
     
     Parameters
     ----------
     filename : str
-        Original filename.
-    
+        Filename to sanitize.
+        
     Returns
     -------
     str
         Sanitized filename.
     """
-    # Remove invalid characters
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    
+    # Remove path separators and special characters
+    sanitized = re.sub(r'[^\w\s.-]', '', filename)
     # Remove leading/trailing dots and spaces
     sanitized = sanitized.strip('. ')
-    
+    # Replace spaces with underscores
+    sanitized = sanitized.replace(' ', '_')
     # Limit length
-    if len(sanitized) > 200:
-        sanitized = sanitized[:200]
-    
-    # Ensure not empty
-    if not sanitized:
-        sanitized = 'unnamed'
-    
-    return sanitized
+    return sanitized[:255]
 
 
-def validate_api_response(
-    response_data: List[Dict[str, Any]],
-    platform: str
-) -> Dict[str, Any]:
+def validate_url(url: str) -> bool:
     """
-    Validate API response data structure.
+    Validate URL format.
     
     Parameters
     ----------
-    response_data : List[Dict[str, Any]]
-        API response data.
-    platform : str
-        Platform name.
-    
+    url : str
+        URL to validate.
+        
     Returns
     -------
-    Dict[str, Any]
-        Validation results.
+    bool
+        True if valid, False otherwise.
     """
-    if not isinstance(response_data, list):
-        return {
-            'is_valid': False,
-            'error': 'Response data must be a list',
-            'valid_count': 0
-        }
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except Exception:
+        return False
+
+
+def validate_date_format(date_str: str) -> bool:
+    """
+    Validate date string format.
     
-    valid_count = 0
-    errors = []
-    
-    # Platform-specific required fields
-    required_fields = {
-        'instagram': ['id', 'url', 'timestamp'],
-        'tiktok': ['createTimeISO', 'webVideoUrl']
-    }
-    
-    fields = required_fields.get(platform.lower(), [])
-    
-    for idx, item in enumerate(response_data):
-        if not isinstance(item, dict):
-            errors.append(f"Item {idx} is not a dictionary")
-            continue
+    Parameters
+    ----------
+    date_str : str
+        Date string to validate.
         
-        missing_fields = [f for f in fields if f not in item]
-        if missing_fields:
-            errors.append(f"Item {idx} missing fields: {missing_fields}")
-        else:
-            valid_count += 1
+    Returns
+    -------
+    bool
+        True if valid, False otherwise.
+    """
+    # Allow formats like "7 days", "2024-01-01", etc.
+    patterns = [
+        r'^\d{4}-\d{2}-\d{2}$',  # YYYY-MM-DD
+        r'^\d+\s+days?$',        # N days
+        r'^\d+\s+weeks?$',       # N weeks
+        r'^\d+\s+months?$'       # N months
+    ]
     
-    return {
-        'is_valid': valid_count == len(response_data),
-        'valid_count': valid_count,
-        'total_count': len(response_data),
-        'errors': errors[:10]  # Limit error messages
-    }
+    return any(re.match(pattern, date_str) for pattern in patterns)
+
+
+def validate_config(config: dict) -> tuple[bool, Optional[str]]:
+    """
+    Validate configuration dictionary.
+    
+    Parameters
+    ----------
+    config : dict
+        Configuration to validate.
+        
+    Returns
+    -------
+    tuple[bool, Optional[str]]
+        (is_valid, error_message)
+    """
+    # Check required keys
+    required_keys = ["instagram", "tiktok"]
+    for key in required_keys:
+        if key not in config:
+            return False, f"Missing required key: {key}"
+        
+        if not isinstance(config[key], list):
+            return False, f"{key} must be a list"
+            
+        # Validate each username
+        for username in config[key]:
+            if not validate_username(username):
+                return False, f"Invalid username: {username}"
+    
+    # Validate settings if present
+    if "settings" in config:
+        settings = config["settings"]
+        
+        if "instagram_posts_limit" in settings:
+            if not validate_limit(settings["instagram_posts_limit"]):
+                return False, "Invalid instagram_posts_limit"
+                
+        if "tiktok_videos_limit" in settings:
+            if not validate_limit(settings["tiktok_videos_limit"]):
+                return False, "Invalid tiktok_videos_limit"
+    
+    return True, None
+
+
+def validate_api_token(token: str) -> bool:
+    """
+    Validate API token format.
+    
+    Parameters
+    ----------
+    token : str
+        API token to validate.
+        
+    Returns
+    -------
+    bool
+        True if valid, False otherwise.
+    """
+    # Basic validation - adjust pattern based on actual token format
+    if not token or len(token) < 10:
+        return False
+    
+    # Check for common placeholder values
+    invalid_tokens = ["your_token_here", "xxx", "placeholder", "test"]
+    if token.lower() in invalid_tokens:
+        return False
+    
+    return True
+
+
+def create_safe_path(base_dir: str, *parts: str) -> str:
+    """
+    Create a safe path that stays within base directory.
+    
+    Parameters
+    ----------
+    base_dir : str
+        Base directory path.
+    *parts : str
+        Path components to join.
+        
+    Returns
+    -------
+    str
+        Safe path within base directory.
+        
+    Raises
+    ------
+    ValueError
+        If resulting path escapes base directory.
+    """
+    from pathlib import Path
+    
+    base = Path(base_dir).resolve()
+    path = base.joinpath(*parts).resolve()
+    
+    # Ensure path is within base directory
+    try:
+        path.relative_to(base)
+        return str(path)
+    except ValueError:
+        raise ValueError("Path traversal attempt detected")
