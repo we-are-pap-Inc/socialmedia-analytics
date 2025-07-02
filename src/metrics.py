@@ -741,6 +741,7 @@ def calculate_all_metrics(
         'total_likes': total_likes(df),
         'total_views': total_views(df),
         'total_comments': total_comments(df),
+        'followers_count': followers_count if followers_count else 0,
         'average_views_videos': average_views_videos(df),
         'average_views_non_videos': average_views_non_videos(df),
         'max_likes': max_likes(df),

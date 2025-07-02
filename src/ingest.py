@@ -7,13 +7,23 @@ and validate the data schema.
 
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 from apify_client import ApifyClient
 from pydantic import BaseModel, ValidationError, field_validator
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
+
+# Load environment variables
+load_dotenv()
+
+# Actor IDs
+INSTAGRAM_ACTOR_ID = "shu8hvrXbJbY3Eb9W"  # For posts
+INSTAGRAM_PROFILE_ACTOR_ID = "dSCLg0C3YEZ83HzYX"  # For profile metadata
+TIKTOK_ACTOR_ID = "OtzYfK1ndEGdwWFKQ"
 
 
 class InstagramPostSchema(BaseModel):
@@ -294,3 +304,215 @@ def load_tiktok_data(
         data = validate_data_schema(data, 'tiktok', strict=strict)
     
     return data
+
+
+def scrape_instagram(
+    username: str,
+    limit: int = 200,
+    client: Optional[ApifyClient] = None
+) -> List[Dict]:
+    """
+    Scrape Instagram posts for a given username.
+    
+    Parameters
+    ----------
+    username : str
+        Instagram username (without @).
+    limit : int
+        Maximum number of posts to scrape.
+    client : Optional[ApifyClient]
+        Apify client instance. If None, creates one from environment.
+    
+    Returns
+    -------
+    List[Dict]
+        List of Instagram post data.
+    
+    Raises
+    ------
+    Exception
+        If scraping fails.
+    """
+    if client is None:
+        api_token = os.getenv("APIFY_API_TOKEN")
+        if not api_token:
+            # Try Streamlit secrets as fallback
+            try:
+                import streamlit as st
+                api_token = st.secrets.get("APIFY_TOKEN")
+            except:
+                pass
+        
+        if not api_token:
+            raise ValueError("APIFY_API_TOKEN not found in environment or secrets")
+        
+        client = ApifyClient(api_token.strip('"').strip("'"))
+    
+    # Create actor input
+    run_input = {
+        "directUrls": [f"https://www.instagram.com/{username}/"],
+        "resultsType": "posts",
+        "resultsLimit": limit,
+        "searchType": "user",
+        "searchLimit": 1,
+        "addParentData": True
+    }
+    
+    logger.info(f"Starting Instagram scrape for @{username} (limit: {limit})")
+    
+    try:
+        # Run the actor
+        run = client.actor(INSTAGRAM_ACTOR_ID).call(run_input=run_input, wait_secs=600)
+        
+        if run['status'] != 'SUCCEEDED':
+            raise Exception(f"Actor run failed with status: {run['status']}")
+        
+        # Get the dataset
+        dataset_id = run['defaultDatasetId']
+        items = list(client.dataset(dataset_id).iterate_items())
+        
+        logger.info(f"Successfully scraped {len(items)} posts for @{username}")
+        return items
+        
+    except Exception as e:
+        logger.error(f"Failed to scrape Instagram @{username}: {str(e)}")
+        raise
+
+
+def scrape_instagram_profile(
+    username: str,
+    client: Optional[ApifyClient] = None
+) -> Optional[Dict]:
+    """
+    Scrape Instagram profile metadata.
+    
+    Parameters
+    ----------
+    username : str
+        Instagram username (without @).
+    client : Optional[ApifyClient]
+        Apify client instance. If None, creates one from environment.
+    
+    Returns
+    -------
+    Optional[Dict]
+        Profile metadata or None if failed.
+    """
+    if client is None:
+        api_token = os.getenv("APIFY_API_TOKEN")
+        if not api_token:
+            # Try Streamlit secrets as fallback
+            try:
+                import streamlit as st
+                api_token = st.secrets.get("APIFY_TOKEN")
+            except:
+                pass
+        
+        if not api_token:
+            logger.warning("APIFY_API_TOKEN not found, skipping profile fetch")
+            return None
+        
+        client = ApifyClient(api_token.strip('"').strip("'"))
+    
+    try:
+        run_input = {"usernames": [username]}
+        run = client.actor(INSTAGRAM_PROFILE_ACTOR_ID).call(run_input=run_input, wait_secs=300)
+        
+        if run['status'] == 'SUCCEEDED':
+            dataset_id = run['defaultDatasetId']
+            items = list(client.dataset(dataset_id).iterate_items())
+            if items:
+                logger.info(f"Successfully fetched profile data for @{username}")
+                return items[0]
+        
+        logger.warning(f"Could not fetch profile data for @{username}")
+        return None
+        
+    except Exception as e:
+        logger.warning(f"Failed to fetch Instagram profile @{username}: {str(e)}")
+        return None
+
+
+def scrape_tiktok(
+    username: str,
+    limit: int = 100,
+    date_limit: Optional[str] = None,
+    client: Optional[ApifyClient] = None
+) -> List[Dict]:
+    """
+    Scrape TikTok videos for a given username.
+    
+    Parameters
+    ----------
+    username : str
+        TikTok username (without @).
+    limit : int
+        Maximum number of videos to scrape.
+    date_limit : Optional[str]
+        Optional date limit (e.g., "7 days", "2024-01-01").
+    client : Optional[ApifyClient]
+        Apify client instance. If None, creates one from environment.
+    
+    Returns
+    -------
+    List[Dict]
+        List of TikTok video data.
+    
+    Raises
+    ------
+    Exception
+        If scraping fails.
+    """
+    if client is None:
+        api_token = os.getenv("APIFY_API_TOKEN")
+        if not api_token:
+            # Try Streamlit secrets as fallback
+            try:
+                import streamlit as st
+                api_token = st.secrets.get("APIFY_TOKEN")
+            except:
+                pass
+        
+        if not api_token:
+            raise ValueError("APIFY_API_TOKEN not found in environment or secrets")
+        
+        client = ApifyClient(api_token.strip('"').strip("'"))
+    
+    # Remove @ if present
+    username = username.lstrip('@')
+    
+    # Create actor input
+    run_input = {
+        "profiles": [username],
+        "resultsPerPage": limit,
+        "profileScrapeSections": ["videos"],
+        "profileSorting": "latest",
+        "shouldDownloadVideos": False,
+        "shouldDownloadCovers": False,
+        "shouldDownloadSubtitles": False,
+        "shouldDownloadSlideshowImages": False
+    }
+    
+    # Add date filter if specified
+    if date_limit:
+        run_input["oldestPostDateUnified"] = date_limit
+    
+    logger.info(f"Starting TikTok scrape for @{username} (limit: {limit})")
+    
+    try:
+        # Run the actor
+        run = client.actor(TIKTOK_ACTOR_ID).call(run_input=run_input, wait_secs=600)
+        
+        if run['status'] != 'SUCCEEDED':
+            raise Exception(f"Actor run failed with status: {run['status']}")
+        
+        # Get the dataset
+        dataset_id = run['defaultDatasetId']
+        items = list(client.dataset(dataset_id).iterate_items())
+        
+        logger.info(f"Successfully scraped {len(items)} videos for @{username}")
+        return items
+        
+    except Exception as e:
+        logger.error(f"Failed to scrape TikTok @{username}: {str(e)}")
+        raise

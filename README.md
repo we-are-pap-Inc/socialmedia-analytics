@@ -58,6 +58,8 @@ echo 'APIFY_API_TOKEN="your_api_token_here"' > .env
 
 ### Basic Usage
 
+#### Option 1: Interactive Dashboard (NEW! 🚀)
+
 1. **Configure your accounts** in `accounts.json`:
 ```json
 {
@@ -70,12 +72,26 @@ echo 'APIFY_API_TOKEN="your_api_token_here"' > .env
 }
 ```
 
-2. **Run the analysis**:
+2. **Run the Streamlit dashboard**:
+```bash
+poetry run streamlit run app.py
+```
+
+3. **Use the dashboard**:
+   - Select accounts from the sidebar
+   - Adjust scraping limits
+   - Click "🔄 Refresh Data" to fetch fresh data
+   - View interactive charts and metrics
+   - Download CSV reports
+
+#### Option 2: Command Line Analysis
+
+1. **Run the batch analysis**:
 ```bash
 poetry run python analyze_all_accounts.py
 ```
 
-3. **Find your reports** in `social_media_reports_december_7_2024/`:
+2. **Find your reports** in `reports/social_media_reports_*`:
 ```
 ├── account1_instagram_account.csv
 ├── account1_tiktok_account.csv
@@ -172,6 +188,20 @@ account_name,platform,bio,followers_count,avg_likes,avg_views,...
 - **Segmented**: `avg_views_videos`, `avg_views_non_videos`
 
 ## 🛠️ Configuration
+
+### Environment Variables
+
+#### Option 1: Using .env file
+```bash
+echo 'APIFY_API_TOKEN="your_api_token_here"' > .env
+```
+
+#### Option 2: Using Streamlit secrets (for dashboard)
+```bash
+# Create .streamlit/secrets.toml
+mkdir -p .streamlit
+echo 'APIFY_TOKEN = "your_api_token_here"' > .streamlit/secrets.toml
+```
 
 ### Apify Actor IDs
 ```python
