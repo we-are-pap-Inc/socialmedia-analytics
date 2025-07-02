@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.env
+venv/
+.venv
+
+# Project docs
+project_docs/
+
+# Cursor rules
+.cursorrules
+.cursor/
+.claude
+CLAUDE.md
+
+# Generated reports
+reports/
+
+# Generated analytics files
+*.csv
+*.pdf
+*.parquet
+*_comparison.json
+*_metrics.json
+*_input.json
+*_sample.json
+!tests/fixtures/*.json
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Runtime data & Streamlit files
+data/
+social_media_reports_*/
++.streamlit/

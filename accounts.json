@@ -1,0 +1,13 @@
+{
+  "instagram": [
+    "wifeygpt"
+  ],
+  "tiktok": [
+    "yeti_is_my_new_marketing"
+  ],
+  "settings": {
+    "instagram_posts_limit": 200,
+    "tiktok_videos_limit": 100,
+    "tiktok_date_limit": null
+  }
+}
