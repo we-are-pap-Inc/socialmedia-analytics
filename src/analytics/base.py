@@ -13,9 +13,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 from pydantic import BaseModel
+
+# Try to import pyarrow, but don't fail if it's not available
+try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    PYARROW_AVAILABLE = True
+except ImportError:
+    PYARROW_AVAILABLE = False
 
 from ..metrics import calculate_all_metrics
 from ..transform import create_unified_schema
@@ -266,18 +272,23 @@ class AccountAnalytics(ABC):
             logger.info(f"Exported metrics to {filepath}")
             
         elif format == 'parquet':
-            # Export full data with metrics as metadata
-            table = pa.Table.from_pandas(self.data)
-            metadata = {
-                b'metrics': json.dumps(report.metrics, default=str).encode('utf-8'),
-                b'account_info': json.dumps(
-                    report.account_info.model_dump(), 
-                    default=str
-                ).encode('utf-8')
-            }
-            table = table.replace_schema_metadata(metadata)
-            pq.write_table(table, filepath)
-            logger.info(f"Exported data and metrics to {filepath}")
+            if PYARROW_AVAILABLE:
+                # Export full data with metrics as metadata
+                table = pa.Table.from_pandas(self.data)
+                metadata = {
+                    b'metrics': json.dumps(report.metrics, default=str).encode('utf-8'),
+                    b'account_info': json.dumps(
+                        report.account_info.model_dump(), 
+                        default=str
+                    ).encode('utf-8')
+                }
+                table = table.replace_schema_metadata(metadata)
+                pq.write_table(table, filepath)
+                logger.info(f"Exported data and metrics to {filepath}")
+            else:
+                logger.warning("PyArrow not available. Falling back to CSV export.")
+                # Fall back to CSV
+                self.export_metrics(filepath.with_suffix('.csv'), format='csv')
             
         else:
             raise ValueError(f"Unsupported format: {format}")

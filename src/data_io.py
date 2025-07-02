@@ -13,8 +13,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
+
+# Try to import pyarrow, but don't fail if it's not available
+try:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    PYARROW_AVAILABLE = True
+except ImportError:
+    PYARROW_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("PyArrow not available. Using CSV format only.")
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +112,12 @@ def save_run(
     # Create filename base
     filename_base = f"{platform}_{username}"
     
-    # Save DataFrame as Parquet
-    parquet_path = dest / f"{filename_base}_data.parquet"
-    table = pa.Table.from_pandas(df)
-    pq.write_table(table, parquet_path)
-    logger.info(f"Saved data to {parquet_path}")
+    # Save DataFrame as Parquet if available, otherwise just CSV
+    if PYARROW_AVAILABLE:
+        parquet_path = dest / f"{filename_base}_data.parquet"
+        table = pa.Table.from_pandas(df)
+        pq.write_table(table, parquet_path)
+        logger.info(f"Saved data to {parquet_path}")
     
     # Save metrics as JSON
     json_path = dest / f"{filename_base}_metrics.json"
@@ -116,7 +125,7 @@ def save_run(
         json.dump(metrics, f, indent=2, default=str)
     logger.info(f"Saved metrics to {json_path}")
     
-    # Also save as CSV for compatibility
+    # Always save as CSV (for compatibility and when pyarrow not available)
     csv_path = dest / f"{filename_base}_data.csv"
     df.to_csv(csv_path, index=False)
     logger.info(f"Saved CSV to {csv_path}")
@@ -151,7 +160,7 @@ def load_run(path: Path, platform: str, username: str) -> Tuple[pd.DataFrame, Di
     parquet_path = path / f"{filename_base}_data.parquet"
     csv_path = path / f"{filename_base}_data.csv"
     
-    if parquet_path.exists():
+    if PYARROW_AVAILABLE and parquet_path.exists():
         df = pd.read_parquet(parquet_path)
         logger.info(f"Loaded data from {parquet_path}")
     elif csv_path.exists():

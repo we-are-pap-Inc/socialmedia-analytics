@@ -58,4 +58,3 @@ Thumbs.db
 # Runtime data & Streamlit files
 data/
 social_media_reports_*/
-.streamlit/

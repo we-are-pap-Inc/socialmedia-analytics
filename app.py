@@ -42,7 +42,6 @@ st.set_page_config(
 
 
 # Load accounts configuration
-@st.cache_data
 def load_accounts_config() -> Dict[str, Any]:
     """Load accounts configuration from accounts.json or Streamlit secrets."""
     # First, try to load from Streamlit secrets (for cloud deployment)
@@ -647,8 +646,12 @@ def main():
         except:
             st.caption(f"Last update: {timestamp_str}")
     
-    # Load configuration
-    config = load_accounts_config()
+    # Initialize session state for config if not exists
+    if 'config' not in st.session_state:
+        st.session_state.config = load_accounts_config()
+    
+    # Use config from session state
+    config = st.session_state.config
     all_accounts = []
     
     # Combine all accounts
@@ -673,14 +676,17 @@ def main():
             
             if st.button("➕ Add Account", type="secondary"):
                 if new_username:
-                    # Update config
-                    if new_platform not in config:
-                        config[new_platform] = []
-                    if new_username not in config[new_platform]:
-                        config[new_platform].append(new_username)
-                        # Save to file
-                        with open("accounts.json", "w") as f:
-                            json.dump(config, f, indent=2)
+                    # Update config in session state
+                    if new_platform not in st.session_state.config:
+                        st.session_state.config[new_platform] = []
+                    if new_username not in st.session_state.config[new_platform]:
+                        st.session_state.config[new_platform].append(new_username)
+                        # Save to file for persistence (local only)
+                        try:
+                            with open("accounts.json", "w") as f:
+                                json.dump(st.session_state.config, f, indent=2)
+                        except Exception as e:
+                            st.warning(f"Could not save to file: {e}")
                         st.success(f"Added @{new_username} to {new_platform}!")
                         st.rerun()
                     else:
@@ -697,9 +703,13 @@ def main():
                 )
                 if st.button("🗑️ Remove Account", type="secondary"):
                     platform, username = account_to_remove
-                    config[platform].remove(username)
-                    with open("accounts.json", "w") as f:
-                        json.dump(config, f, indent=2)
+                    st.session_state.config[platform].remove(username)
+                    # Save to file for persistence (local only)
+                    try:
+                        with open("accounts.json", "w") as f:
+                            json.dump(st.session_state.config, f, indent=2)
+                    except Exception as e:
+                        st.warning(f"Could not save to file: {e}")
                     st.success(f"Removed @{username} from {platform}!")
                     st.rerun()
         
