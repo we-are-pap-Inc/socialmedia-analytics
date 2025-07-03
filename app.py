@@ -16,6 +16,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -664,10 +665,32 @@ def main():
         # Extract timestamp from directory name (format: YYYY-MM-DDTHH-MM-SS)
         timestamp_str = latest_run.name
         try:
-            # Parse the timestamp
-            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
-            st.caption(f"Last update: {timestamp.strftime('%B %d, %Y at %I:%M %p')}")
-        except:
+            # Parse the timestamp (assumes UTC)
+            timestamp_utc = datetime.strptime(timestamp_str, "%Y-%m-%dT%H-%M-%S")
+            
+            # Convert to configured timezone (default to PT)
+            utc_tz = pytz.timezone('UTC')
+            
+            # Get timezone from settings or default to Pacific
+            display_timezone = 'US/Pacific'
+            timezone_abbr = 'PT'
+            
+            if 'config' in st.session_state and 'settings' in st.session_state.config:
+                tz_setting = st.session_state.config['settings'].get('timezone', 'US/Pacific')
+                if tz_setting:
+                    display_timezone = tz_setting
+                    # Get timezone abbreviation
+                    tz_obj = pytz.timezone(display_timezone)
+                    timezone_abbr = datetime.now(tz_obj).strftime('%Z')
+            
+            target_tz = pytz.timezone(display_timezone)
+            timestamp_utc = utc_tz.localize(timestamp_utc)
+            timestamp_local = timestamp_utc.astimezone(target_tz)
+            
+            # Format with timezone
+            st.caption(f"Last update: {timestamp_local.strftime('%B %d, %Y at %I:%M %p')} {timezone_abbr}")
+        except Exception as e:
+            logger.warning(f"Error parsing timestamp: {e}")
             st.caption(f"Last update: {timestamp_str}")
     
     # Initialize session state for config if not exists
